@@ -1,0 +1,67 @@
+---
+title: 'Bootstrap: How I built this blog site with Next.js'
+description: My experience using Next.js 14 and MDX to build this blog
+slug: bootstrap-building-a-blog-with-nextjs
+date: 2023-12-31
+lastModified: 2024-01-21
+---
+
+I've been intrigued for a while about the trend towards headless CMS in recent years, in particular for the potential of these
+technologies to help build sites that can bring together different back-end data sources, allowing the CMS component to focus
+on what it's good at: being a CMS. There are a few options out there for doing this kind of thing, and for me
+[Next.js](https://nextjs.org/) looked to be the most interesting one. While I've dabbled in React in recent years
+(e.g. [Election Stats](https://www.npmjs.com/package/election-stats-icu)), I've yet to play with any server-side React, so I
+thought what better way to get started than by making a personal blog?
+
+The goals for this project are:
+
+* Make a simple statically generated blog using Next.js.
+* Blog posts should be composed in Markdown and live in the same repository.
+* Blog posts need to be able to do nice code syntax highlighting.
+
+## Contentlayer and MDX
+
+My initial investigations on how to do this stuff brought two technologies to my attention:
+
+* [Contentlayer](https://contentlayer.dev/): A content SDK for transforming content to type-safe JSON from various sources.
+* [MDX](https://mdxjs.com/): Combine Markdown with JSX.
+
+There's a bunch of blogs and YouTube vids about using Contentlayer with MDX to do exactly this kind of thing, but digging a
+little deeper I became concerned about the
+[support situation for Contentlayer](https://github.com/contentlayerdev/contentlayer/issues/429), so decided to steer clear.
+
+## Using MDX directly
+
+With Contentlayer out of the picture, I then started investigating using MDX directly, and quickly discovered an excellent
+blog post on [Building a blog with Next.js 14 and React Server Components](https://maxleiter.com/blog/build-a-blog-with-nextjs-13)
+by [Max Leiter](https://maxleiter.com/), which ticked all the boxes.
+
+If you've come here looking for a tutorial on how to do this stuff, then your next step is to go read Max's blog post, which
+will get you up and running. For the rest of this blog post I'll focus on the bits I learned along the way, and on the things
+I opted to do a little differently.
+
+## Front matter
+
+Having not built a staticly generated site before I hadn't really encountered the idea of front matter, where a content file
+is prefixed with a piece of YAML (or TOML etc) to provide structured metadata. Max uses
+[grey-matter](https://github.com/jonschlinkert/gray-matter) for this, which allows us to provide the blog title, description,
+slug, and post date directly in the mdx file.
+
+## Where did all my pages go?
+
+After getting to the state where Things Should Work I fired up `npm run dev`, went to my browser and tried to access a blog
+post. Next JS threw back a 404 in my face for the blog post, but also for the site home page which had previously worked.
+I was a bit stumped, until I spotted that I'd missed out typescript extensions when setting up MDX in `next.config.js`:
+
+```next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+    // Without 'ts' and 'tsx', our typescript components will simply be ignored and everything becomes Not Found
+    //pageExtensions: ['js', 'jsx', 'mdx'],
+    pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'mdx'],
+}
+
+const withMDX = require('@next/mdx')();
+
+module.exports = withMDX(nextConfig);
+```
