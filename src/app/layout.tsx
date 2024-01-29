@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Lato } from 'next/font/google'
 import localFont from 'next/font/local'
+import Script from 'next/script'
 
 import './globals.css'
 
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
         template: '%s | Turbinado',
         default: 'Turbinado',
     },
-    description: 'The blog of Phil Stewart, a UK web dev / tech geek.',
+    description: 'The blog of Phil Stewart, a UK web developer and tech geek.',
 }
 
 export default function RootLayout({
@@ -53,6 +54,7 @@ export default function RootLayout({
                     </footer>
                 </div>
             </body>
+            <Script strategy="afterInteractive" async src="https://eu.umami.is/script.js" data-website-id="d4053088-cc6a-4a3c-bcae-5dce7e7cf50e"></Script>
         </html>
     )
 }
