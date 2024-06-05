@@ -1,0 +1,114 @@
+---
+title: "Faking a 404 with Refit"
+description: 'The API returns a 200 OK with a json message indicating not found, what to do.'
+slug: faking-a-404-wuth-refit
+date: 2024-06-05
+---
+
+I'm interacting with a bunch of REST APIs using [Refit](https://github.com/reactiveui/refit), which is
+a really great C# library that allows you to write an annotated interface for an API and generates an
+implementation for it:
+
+```Program.cs
+class Thing {
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    // ...
+}
+
+public interface ISomeRandomApi
+{
+    [Get("/things/{id}")]
+    Task<Thing> GetThing(int id);
+}
+
+var someRandomApi = RestService.For<ISomeRandomApi>("https://somerandomapi.example.com");
+var thing = await someRandomApi.GetThing(1);
+Console.WriteLine("The thing is called {0}", thing.Name);
+```
+
+If everything works nicely you'll get back the API response nicely deserialized to an instance of
+your object. If not, Refit will throw an `ApiException` for you which will tell you what went
+wrong, which we can catch and handle. Alternatively you can define the interface method with a
+`Task<ApiResponse<Thing>>` return type which wraps the deserialized object with the response
+information and any error.
+
+This works great, however I ran into a bit of a problem with one endpoint I'm interacting with,
+which spuriously returns a `200 OK` status code for something that's not found, rather than a
+`404`. In this case, instead of sending the JSON object of the retrieved object, we get back
+something like this:
+
+```json
+{
+  "success": false,
+  "message": "Thing not found"
+}
+```
+
+As it happens this JSON will quite happily deserialize to an instance of `Thing`, but getting a
+blank object back is not what we want. Sending a `200` is obviously a bug in the endpoint which
+I'm sure will get fixed eventually, however in the meantime I need to cope.
+
+What to do?
+
+## Default Interface Methods to the rescue!
+
+Instead of using the generated API method directly, we can hide the generated method by marking it
+as `internal` and then wrap it with a public method that does a bit of extra logic. In our case,
+that extra logic will try to parse the response in a way that lets us check the `status` property,
+and if it's bad we can manually throw an `ApiException` with a `404 Not Found` status, as if the
+endpoint had done it itself:
+
+```Program.cs
+// ...
+
+// Define a subclass of thing that includes the "success" property.
+public class GetThingResponse : Thing
+{
+    // We default it to true so the only time it becomes false is
+    // if the JSON property is both present and explicitly false.
+    public bool Success { get; set; } = true;
+}
+
+public interface ISomeRandomApi
+{
+    // Internalise the generated API call method and wrap it in an
+    // ApiReponse.
+    [Get("/things/{id}")]
+    internal Task<ApiResponse<GetThingResponse>> GetThingInternal(int id);
+
+    // Replace our original generated method with a default interface
+    // method wrapping the internal generated method.
+    public async Task<Thing> GetThing(int id)
+    {
+        var thingResponse = await GetThingInternal(id);
+
+        // If the API call genuinely failed then we just rethrow
+        // the captured ApiException from ApiResponse
+        if (!thingResponse.IsSuccessStatusCode)
+        {
+            throw thingResponse.Error;
+        }
+
+        // Now we check to see if the dubious "success" property
+        // is false.
+        GetThingResponse thing = thingResponse.Content;
+        if (!thing.Success)
+        {
+            // We throw a newly created ApiException with a
+            // 404 response.
+            throw await ApiException.Create(
+                thingRepsonse.RequestMessage ?? new HttpRequestMessage(),
+                HttpMethod.Get,
+                new HttpResponseMessage(System.Net.HttpStatusCode.NotFound),
+                thingResponse.Settings
+            );
+        }
+    }
+}
+```
+
+Our new `GetThing` implementation now behaves like you would expect, with 404 errors nicely faked
+out. Well almost: we've disregarded the real response in the fake 404 exception, so we can't access
+the returned content from the ApiException as we normally would, but in this case that's not a
+concern as for a 404 the status code is probably all we really care about.
