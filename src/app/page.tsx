@@ -29,7 +29,7 @@ export default async function Home() {
                     About
                 </h2>
                 <p>
-                    My name's Phil, and I'm currently Senior Web Developer
+                    My name's Phil, and I'm currently the Systems Specialist
                     for <a href="https://www.imperialcollegeunion.org">Imperial College Union</a>,
                     the <a href="https://en.wikipedia.org/wiki/Students%27_union">students' union</a> of <a href="https://www.imperial.ac.uk">Imperial College London</a>.
                 </p>
