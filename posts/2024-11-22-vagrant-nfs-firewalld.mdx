@@ -1,0 +1,74 @@
+---
+title: "Mounting NFS with Vagrant when Firewall Says No"
+description: 'The magic incantation to make RHEL / AlmaLinux say yes.'
+slug: vagrant-nfs-firewalld
+date: 2024-11-22
+---
+
+I'm currently playing around with [Ansible](https://www.ansible.com/) using [Vagrant](https://www.vagrantup.com/)
+on an [AlmaLinux](https://almalinux.org/) 9 box to provision some VMs (also running AlmaLinux 9), which I plan
+to use as dev boxes for testing Ansible configuration management. One of the fun side quests is to provide an NFS
+export on the host box which can be accessed in all the Vagrant provisioned VMs. Vagrant has good support for this,
+allowing you to specify an NFS synced folder in your Vagrantfile:
+
+<Code lang="ruby" title="Vagrantfile">
+{`Vagrant.configure(2) do |config|
+  config.vm.synced_folder "/host/path", "/guest/mount/point",
+    type: "nfs",
+    nfs_version: "4.2",
+    nfs_udp: false
+
+  # etc
+end`}
+</Code>
+
+It takes care of modifying `/etc/exports` on the host, which is great, but we still need to our initial
+configuration of NFS on the host to get things working. Being as I am an NFS newbie (I've carefully avoided it
+as much as possible over the past 25 years), and as AlmaLinux is a rebadged
+[RHEL](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux), I opted to follow the
+[RHEL NFS clues for configuring and NFSv4 server](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_and_using_network_file_services/deploying-an-nfs-server_configuring-and-using-network-file-services#configuring-an-nfsv4-only-server_deploying-an-nfs-server)
+which worked pretty well, but fell short on what was needed on the firewall step:
+
+```sh
+firewall-cmd --permanent --add-service nfs
+firewall-cmd --reload
+```
+
+After running `vagrant reload` my VMs were getting stuck mounting the nfs share:
+
+```
+$ vagrant reload
+...
+==> vagrant: Preparing to edit /etc/exports. Administrator privileges will be required...
+==> vagrant: Mounting NFS shared folders...
+    vagrant: /host/path => /guest/mount/point
+The following SSH command responded with a non-zero exit status.
+Vagrant assumes that this means the command failed!
+
+mount -o vers=4.2 192.168.121.1:/host/path /guest/mount/point
+Stdout from the command:
+
+
+
+Stderr from the command:
+
+mount.nfs: Connection refused
+```
+
+Sure enough, when attempting to manually mount an NFS export inside the guest, it failed after a suitably long
+timeout. So I tried temporarily turning off the host firewall (i.e. `systemctl stop firewalld`), and hey presto
+it all worked just fine. So what gives?
+
+## libvirt and firewalld
+
+The answer was due to my use of [libvirt](https://libvirt.org/) as the VM provider for Vagrant. It turns out
+that if [firewalld](https://firewalld.org/) is present,
+[libvirt will put its bridge interfaces in a firewalld zone](https://libvirt.org/firewall.html#firewalld-and-the-virtual-network-driver)
+named "libvirt", so the magic incantation to allow the VM guests to access nfs on the host is:
+
+```sh
+firewall-cmd --permanent  --zone libvirt --add-service nfs
+firewall-cmd --reload
+```
+
+Then it is fixed forever.
