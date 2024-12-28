@@ -1,6 +1,7 @@
 import getPosts from '@/lib/get-posts'
 import Image from 'next/image'
 import Link from 'next/link'
+import PostList from '@/components/layout/PostList'
 
 async function getPostsByDateDesc() {
     const posts = await getPosts()
@@ -36,28 +37,7 @@ export default async function Home() {
             </section>
             <section className="space-y-4 my-4">
                 <h2>Blogs</h2>
-                <ul className="list-none space-y-4 px-0">
-                    {posts.map((post) => {
-                        if (post) {
-                            const publishedDate = post.date.toLocaleDateString('en-GB', {
-                                month: 'long',
-                                day: 'numeric',
-                                year: 'numeric',
-                            })
-
-                            return (
-                                <li key={post.slug}>
-                                    <p className="font-bvs text-zinc-750 dark:text-zinc-400">{publishedDate}</p>
-                                    <h3><Link href={`/post/${post.slug}`}>{post.title}</Link></h3>
-                                    <p>{post.description}</p>
-                                </li>
-                            )
-                        }
-                        else {
-                            return null;
-                        }
-                    })}
-                </ul>
+                <PostList posts={posts} />
             </section>
         </main>
     )
