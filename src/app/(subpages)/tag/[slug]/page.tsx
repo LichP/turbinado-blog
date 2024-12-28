@@ -29,7 +29,7 @@ export default async function TagPage({
     return (
         <main>
             <section className="space-y-4 my-4">
-                <h1>Tag: {tagTitle(tag)}</h1>
+                <h1>Tag: {tagTitle(tag ?? params.slug)}</h1>
                 <PostList posts={posts} />
             </section>
         </main>
