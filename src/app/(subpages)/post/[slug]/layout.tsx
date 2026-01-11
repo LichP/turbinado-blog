@@ -5,12 +5,10 @@ import TagLabel from '@/components/ui/TagLabel'
 
 import type { JSX } from "react";
 
+type Params = Promise<{ slug: string }>
+
 export const generateMetadata = async (
-    props: {
-        params: Promise<{
-            slug: string
-        }>
-    }
+    props: { params: Params }
 ): Promise<Metadata> => {
     const params = await props.params;
     const post = (await getPosts()).find((p) => p?.slug === params.slug)
@@ -49,21 +47,16 @@ async function getData({ slug }: { slug: string }) {
     }
 }
 
-export default async function PostLayout(
-    props: {
-        children: JSX.Element
-        params: Promise<{
-            slug: string
-        }>
-    }
-) {
-    const params = await props.params;
+export default async function PostLayout({
+    children,
+    params,
+}: {
+  children: React.ReactNode
+  params: Params
+}) {
+    const { slug } = await params
 
-    const {
-        children
-    } = props;
-
-    const { previous, next, title, date, lastModified, tags } = await getData(params)
+    const { previous, next, title, date, lastModified, tags } = await getData({ slug })
 
     const publishedDate = date
         ? date.toLocaleDateString('en-GB', {
