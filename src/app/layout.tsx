@@ -49,7 +49,7 @@ export default function RootLayout({
                     <footer className="text-sm py-6 space-y-2">
                         <hr/>
                         <div className="">
-                            Copyright 2024 <a href="mailto:phil.stewart@lichp.co.uk">Phil Stewart</a> | <a href="https://github.com/LichP/turbinado-blog">View source code on Github</a>
+                            Copyright 2024-2026 <a href="mailto:phil.stewart@lichp.co.uk">Phil Stewart</a> | <a href="https://github.com/LichP/turbinado-blog">View source code on Github</a>
                         </div>
                     </footer>
                 </div>

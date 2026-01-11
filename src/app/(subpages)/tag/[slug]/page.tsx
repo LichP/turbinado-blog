@@ -16,13 +16,14 @@ async function getPostsByTagDateDesc(slug: string) {
     return posts.sort((a, b) => (b?.date.getTime() ?? 0) - (a?.date.getTime() || 0))
 }
 
-export default async function TagPage({
-    params,
-}: {
-    params: {
-        slug: string
+export default async function TagPage(
+    props: {
+        params: Promise<{
+            slug: string
+        }>
     }
-}) {
+) {
+    const params = await props.params;
     const posts = await getPostsByTagDateDesc(params.slug)
     if (posts.length == 0) return notFound()
     const tag = posts[0].tags.find((tag) => tagSlug(tag) == params.slug)
