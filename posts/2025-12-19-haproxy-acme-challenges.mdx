@@ -1,0 +1,136 @@
+---
+title: "Handling ACME Challenges with HAProxy"
+description: 'How to directly serve challenge responses without a dedicated backend.'
+slug: haproxy-acme-challenges
+date: 2025-12-19
+tags:
+  - devops
+  - haproxy
+  - tls
+  - acme
+  - certbot
+---
+
+One task we always have to tackle when deploying websites is generating and serving appropriate TLS certificates.
+These days unless you have a need for a certificate with organisation or
+[extended validation](https://en.wikipedia.org/wiki/Extended_Validation_Certificate) you'll most likely be using
+an [ACME](https://en.wikipedia.org/wiki/Automatic_Certificate_Management_Environment) provider such as
+[Let's Encrypt](https://letsencrypt.org/) with tools like [Certbot](https://certbot.eff.org/). When using
+[HAProxy](https://www.haproxy.org/) this presents a fun configuration challenge: how can we handle ACME challenges?
+
+The most obvious way to solve this is to define a backend to pass ACME challenges through to and let certbot do its
+thing with whatever webserver that backend is powered by. This is OK if you've got a convenient webserver vhost to use
+for the backend, but its a hassle if you don't - standing up an entire webserver to provide that backend is a lot of
+extra faff we don't want or need to be dealing with.
+
+The alternative approach is to get HAProxy to handle and respond to ACME challenges directly. The simple way of doing
+this is decribed in this
+[HAProxy blog post section titled 'Configure HAProxy to Respond to HTTP Challenges'](https://www.haproxy.com/blog/haproxy-and-let-s-encrypt#configure-haproxy-to-respond-to-http-challenges).
+The relevant config snippet is as follows:
+
+```
+global
+    setenv ACCOUNT_THUMBPRINT 'some_letsencrypt_thumbprint_hex_string'
+
+frontend web
+    bind :80
+    bind :443 ssl crt /etc/haproxy/certs/ strict-sni
+    http-request return status 200 content-type text/plain lf-string "%[path,field(-1,/)].${ACCOUNT_THUMBPRINT}\n" if { path_beg '/.well-known/acme-challenge/' }
+```
+
+This works, but there's a couple of problems. Firstly, it only works for a single account, since we're encoding the
+account thumbprint directly in to the configuration file. While you can quite happily get away with this most the time
+you can still run into problems even with a single account setup, such as when reconfiguring a certificate with certbot
+where it attempts to simulate a renewal using the Let's Encrypt staging servers (which uses a different account).
+
+Secondly, there's a potential security issue: this configuration behaves as a _validation oracle_. This could be a
+problem if your ACME provider account details are ever compromised (e.g. if you run `certbot` on a different system to
+where you run HAProxy and that system gets hacked). The attacker could then point a domain they control at your server
+and request a certificate using your compromised account details, and HAPoxy would happily respond to this challenge.
+The attacker could then redirect that domain elsewhere and use it for whatever nefarious purpose using a certificate
+that implicates you. This is probably quite a low risk scenario, but it's still worth addressing.
+
+So how can we do better?
+
+## Hooks to the rescue!
+
+The idea is to provide ACME challenge responses to HAProxy using the runtime API. If HAProxy receives a challenge it
+knows about it can provide the appropriate response, and if it receives an unexpected challenge it can respond with a
+404. The ACME client can then use a pre-renewal hook to supply the challenge to HAProxy via the runtime API just in
+time for HAProxy to respond to the challenge request, and then use a post-renewal hook to remove the challenge
+afterwards.
+
+Here's what the HAProxy configuration looks like for this:
+
+```
+frontend web
+    bind :80
+    bind :443 ssl crt /etc/haproxy/certs/ strict-sni
+
+    # Set an ACL for ACME challenge requests
+    acl acme-challenge path_beg /.well-known/acme-challenge/
+
+    # Extract token (last path segment)
+    http-request set-var(txn.acme_token) path,field(-1,/)
+
+    # Check for a validation associated with this token as supplied by the certbot pre-hook to the tokens map
+    http-request set-var(txn.acme_validation) var(txn.acme_token),map(virt@acme-tokens.map,"")
+
+    # If the validation exists, return it as the body (text/plain). Return 404 for any other ACME challenge
+    http-request return status 200 content-type text/plain lf-string "%[var(txn.acme_validation)]\n" if acme-challenge { var(txn.acme_validation) -m len gt 0 }
+    http-request return status 404 if acme-challenge
+```
+
+We use a virtual map file `virt@acme-tokens.map` to store challenges as there's no need for this to ever exist as a
+real file: our default state at start up is that there are no ACME challenges in progress, and we only ever make
+additions to and removals from the map via the runtime API. The map is keyed by the challenge token and stores the
+entire challenge response as the value. This means that we're completely account agnostic: we don't need to
+reconfigure HAProxy any time we want to use a different acconut thumbprint.
+
+To make this work, we need some hooks to run when we generate a certificate. Here's what they look like:
+
+```haproxy-pre.sh
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'add map virt@acme-tokens.map %s %s\n' "${CERTBOT_TOKEN}" "${CERTBOT_VALIDATION}" | socat stdio tcp4-connect:127.0.0.1:9999
+```
+
+```haproxy-post.sh
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'del map virt@acme-tokens.map %s\n' "${CERTBOT_TOKEN}" | socat stdio tcp4-connect:127.0.0.1:9999
+```
+
+These assume the HAProxy runtime API is running on localhost port 9999, you will need to modify the `socat` commands
+in line with your own setup.
+
+We can then use these hooks with `certbot` like this:
+
+```sh
+certbot certonly --manual --preferred-challenges=http \
+   --manual-auth-hook /etc/letsencrypt/renewal-hooks/pre/haproxy-pre.sh \
+   --manual-cleanup-hook /etc/letsencrypt/renewal-hooks/post/haproxy-post.sh \
+   -d mydomain.example.com
+```
+
+When `certbot` executes these hooks it sets the `CERTBOT_TOKEN` and `CERTBOT_VALIDATION` environment variables. The
+`haproxy-pre.sh` hook script adds the appropriate entry to the tokens map, and `haproxy-post.sh` removes it to
+clean up.
+
+This setup also works for renewal, and when combined with a deployment script to replace the cert in HAProxy via the
+runtime API we can achieve a completely automated renewal with no downtime. This approach is also ACME client
+agnostic from HAProxy's persepective: we can use any client that supports the use of hooks to communicate the token
+and validation data to HAProxy.
+
+## Doesn't HAProxy natively support ACME now?
+
+There is now [support for the ACME protocol in Haproxy 3.2](https://www.haproxy.com/blog/announcing-haproxy-3-2#acme-protocol)
+which is a great step forwards. The example they provide there essentially works the same way as the approach shown
+in this post using a virtual map, the key difference being that HAProxy handles the certificate generation process and
+therefore populates the virtual map directly as configured in the `acme` section.
+
+It looks like we need to call the Runtime API in order to create a certificate (and renew it?) and to persist it to
+disk so we don't lose it whenever HAProxy restarts.
+
+Given that ACME support is still considered experimental, my preference at the moment is this hook-based approach
+using a traditional ACME client, however that may change as ACME support matures in future HAProxy versions.
