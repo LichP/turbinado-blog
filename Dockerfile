@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -20,4 +20,4 @@ RUN npm run build
 # Production image, copy all the files and run caddy
 FROM caddy:2-alpine AS production
 COPY Caddyfile /etc/caddy/Caddyfile
-COPY --from=builder /app/out /srv
+COPY --from=builder /app/dist /srv
