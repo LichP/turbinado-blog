@@ -1,0 +1,215 @@
+---
+title: "Converting this blog to Astro"
+description: 'Next.js is so last week.'
+slug: converting-blog-astro
+date: 2026-05-09
+tags:
+  - coding
+  - astro
+  - mdx
+  - typescript
+---
+
+Part of the goal when creating this blog was to gain some experience with [Next.js](https://nextjs.org/) and evaluate its
+potential in the headless CMS space. Since then Next.js has been experiencing pain with React Server Component security
+vulnerabilities, and continues to be a pain in the ass to deploy outside of Vercel's walled-garden: this is improving,
+but good support for simple containerised deployments is still lacking in many way, particularly around caching.
+
+The time has come for me to try something else for this blog. [Tanstack Start](https://tanstack.com/start/latest) is the
+obvious goto as the framework expected to make big inroads against Next.js when it finally hits 1.0. However, one of the
+key goals for the blog itself is to to be a statically generated site that can be easily deployed using a simple webserer,
+so I've opted to go with [Astro](https://astro.build/) as an SSG-first framework.
+
+This blog was written as a set of notes documenting the conversion process as I did it, so apologies in advance if it gets
+a bit rambling!
+
+## Strategy
+
+The strategy for performing this conversion goes like this:
+
+1. Stand-up an Astro blog as a separate project in a new folder using the standard template.
+2. Do the conversion by developing in the new project, copying over existing content and styling from the original Next.js,
+   project, and iterating until we have content and presentation parity (or better).
+3. Copy everything back to the original project and munge a commit.
+
+## Standing up an Astro blog
+
+I started out using the Blog template from [astro.new](https://astro.new/latest/), standing up a project in a folder
+called `astro-blog` using the CLI command:
+
+```sh
+# The command will prompt you for the name of the project folder you want to create
+npm create astro -- --template blog
+```
+
+As the plan is to eventually copy this back to the `turbinado-blog` project folder, before going any further I manually
+renamed the project to `turbinado-blog` in `package.json`.
+
+## The conversion
+
+Out of the box the blog template has a bunch of layouts, home and about pages, and a blog 
+
+### Styling with Tailwind
+
+The first thing I decided to do was to recreate the look and feel of the blog, so the first step was to
+[install Tailwind for Astro](https://tailwindcss.com/docs/installation/framework-guides/astro):
+
+```sh
+npm install tailwindcss @tailwindcss/vite
+```
+
+I then enabled the the Tailwind vite plugin in `astro.config.mjs` as per the framework guide linked above, and then copied
+over my existing `globals.css` to `src/styles/global.css`, the only change being to replace the`@tailwind` directives with
+ `@import "tailwindcss";` at the top as per usual when upgrading from Tailwind 3 to 4.
+
+### Fonts
+
+Next up was the main layout, however as the Next.js app router main layout also takes care of font setup, I needed to get font
+configuration solved first. The blog uses two fonts:
+[Bitstream Vera Sans](https://download.gnome.org/sources/ttf-bitstream-vera/1.10/) for headings and tags links, and
+[Lato](https://fonts.google.com/specimen/Lato?preview.script=Latn) for body text. Setting up the fonts was all straightforward
+as per the [Astro 'using custom fonts' guide](https://docs.astro.build/en/guides/fonts/), with Bitstream Vera Sans configured
+as a local font, and Lato using [Fontsource](https://fontsource.org/fonts/lato). I plugged both in to the
+`src/components/BaseHead.astro` component, and then linked them up to Tailwind, to create the `font-sans` and `font-bvs`
+classes:
+
+```css
+@theme inline {
+	--font-sans: var(--font-lato), sans-serif; 
+	--font-bvs: var(--font-bitstream-vera-sans), var(--font-lato), sans-serif;
+}
+```
+
+### Main layout
+
+Now on to the main layout proper. As I had a single site-wide layout with nested child layouts for more specific pages, I opted to
+create `src/layouts/Layout.astro` for the the site-wide layout, copied over the existing `src/app/layout.tsx` content, and
+began converting using the generated `index.astro` files as a reference. The biggest change here is having to handle the
+`<head>` element, which Next.js essentially took care of entirely. However, the Astro template includes a `<BaseHead>` component
+which does the heavy lifting. For now I've added some props for `title` and `description` to `Layout.astro` to pass through
+to `<BaseHead>`.
+
+### Index page
+
+This is a straight-up copy of `src/app/page.tsx` to `src/pages/index.astro`, with a satisfying renaming of `className` props
+back to `class` on HTML elements. At this point I was not yet ready to bring in the blog list, so I left this commented out to
+focus on validating the visual presentation of the index page and main layout. To make the blog list, we first need some blog
+content to exist ...
+
+### The Blogs
+
+This is where Astro starts to really shine, as it has first-class support for Markdown and [MDX](https://mdxjs.com/) out of the
+box, and facilitates managing collections of Markdown / MDX content files using
+[content collections](https://docs.astro.build/en/guides/content-collections/). The content collections are managed visual
+`src/content.config.ts`, which is already set up as part of the Astro blog template. By default Astro uses the `src/content`
+folder for content collections, however we are free to use whatever folder we like, so I've continued to use my existing
+`posts` top level folder.
+
+Astro also expects you to use front matter on your Markdown content, and allows you to define a schema for your front matter
+so that it can automatically generate and apply a TypeScript interface to it. The most challenging part of this was defining
+the schema for the `tags` field, which is a collection of tags where a tag is either a plain string or an object consisting
+of a single string key and string value, facilitating a presentational override for a tag (e.g the `c-sharp` tag is presented
+as `c#`). The original type for this was:
+
+```ts
+export type Tag = string | {
+    [key: string]: string
+}
+```
+
+Here's how I set up `src/content.config.ts`, redefining the `Tag` type from the Zod schema definition:
+
+```ts
+import { defineCollection } from 'astro:content';
+import { glob } from 'astro/loaders';
+import { z } from 'astro/zod';
+
+const tagSchema = z.union([
+  z.string(),
+  z.record(z.string(), z.string())
+]);
+
+export type Tag = z.infer<typeof tagSchema>;
+
+const blog = defineCollection({
+	// Load Markdown and MDX files in the `src/content/blog/` directory.
+	loader: glob({ base: './posts', pattern: '**/*.{md,mdx}' }),
+	// Type-check frontmatter using a schema
+	schema: () =>
+		z.object({
+			title: z.string(),
+			description: z.string(),
+			date: z.coerce.date(),
+			lastModified: z.coerce.date().optional(),
+			tags: z.array(tagSchema),
+	}),
+});
+
+export const collections = { blog };
+```
+
+With this done it was straightforward to rename the `blog` folder to `post` and work through changes to layouts and components to
+get `src/post/[...slug].astro` to get a basic render of the content.
+
+### Blogs: Previous and Next
+
+Solved by John Dalesandro:
+[Astro: Adding Previous and Next Post Navigation Links to Blog](https://johndalesandro.com/blog/astro-adding-previous-and-next-post-navigation-links-to-blog/)
+
+### Blogs: Syntax Highlighting
+
+Astro has baked in support for syntax highlighting using [Shiki](https://shiki.style/), however we don't get editor framework
+style titles directly from Shiki like we did with [Bright](https://bright.codehike.org/), so I've opted to switch to
+[Expressive Code](https://expressive-code.com/), which has a number of nice features like editor frames, text and line markers,
+etc, and has an Astro integration so is very simple to install.
+
+To make use of editor titles and other cool features I have had to go back and edit old posts to make the language and title
+explicit, e.g.
+
+````diff
+-```Program.cs
++```cs title="Program.cs"
+````
+
+Syntax highlighting has been the biggest visual change resulting from this conversion, I think it's a nice upgrade 🙂
+
+### Listing and tags
+
+The `PostList` component was straightforward to convert, and reading in the full list of blogs sorted by date is as simple as:
+
+```ts
+const posts = (await getCollection('blog'))
+  .sort((a, b) => (b.data.date?.valueOf() ?? 0) - (a.data.date?.valueOf() ?? 0));
+```
+
+Tags was a little bit more interesting, here we need to generate the slug params array for the static site build in much the same
+way as we do in Next.js with `generateStaticParams`:
+
+```ts
+export async function getStaticPaths() {
+	const posts = await getCollection('blog');
+    return posts
+		.reduce((tagSlugs: Array<string>, post) => {
+			post.data.tags.forEach((tag: Tag) => {
+				if (!tagSlugs.includes(tagSlug(tag))) {
+					tagSlugs.push(tagSlug(tag))
+				}
+			})
+			return tagSlugs;
+	    }, [])
+		.map((tag: string) => { return { params: { slug: tag }} })
+}
+```
+
+## The Munge Commit
+
+The main conversion was committed in `ce21168`, which excluded `package-lock.json` and all changes to `posts`. The committed
+was for 630 insertions and 710 deletions, a net removal of 80 loc. `package-lock-json` was committed separately in `23c95a4`,
+with 3517 insertions and 6215 deletions, demonstrating how much smaller Astro's dependency footprint is versus Next.js. 
+
+## Final Thoughts
+
+Doing this conversion has taken me a little over an afternoon. I've quite enjoyed playing with Astro so far, it's a great
+framework for SSG sites and the basics are all very straightforward. For situations where going full React makes more sense
+Next.js is still a solid choice, although I'm also looking forward to trying out Tanstack Start as an alternative. In the
+meantime I'm happy with this conversion and look forward to playing around with Astro some more 🙂
