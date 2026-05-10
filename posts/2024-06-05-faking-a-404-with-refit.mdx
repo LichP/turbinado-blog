@@ -1,8 +1,9 @@
 ---
 title: "Faking a 404 with Refit"
 description: 'The API returns a 200 OK with a json message indicating not found, what to do.'
-slug: faking-a-404-wuth-refit
+slug: faking-a-404-with-refit
 date: 2024-06-05
+lastModified: 2026-05-10
 tags:
   - coding
   - dotnet
@@ -10,11 +11,15 @@ tags:
   - refit
 ---
 
+_Edited to correct missing return in `GetThing` and to allow `thingResponse.Content` to be nullable._
+
+____
+
 I'm interacting with a bunch of REST APIs using [Refit](https://github.com/reactiveui/refit), which is
 a really great C# library that allows you to write an annotated interface for an API and generates an
 implementation for it:
 
-```Program.cs
+```cs title="Program.cs"
 class Thing {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
@@ -64,7 +69,7 @@ that extra logic will try to parse the response in a way that lets us check the 
 and if it's bad we can manually throw an `ApiException` with a `404 Not Found` status, as if the
 endpoint had done it itself:
 
-```Program.cs
+```cs title="Program.cs"
 // ...
 
 // Define a subclass of thing that includes the "success" property.
@@ -97,8 +102,8 @@ public interface ISomeRandomApi
 
         // Now we check to see if the dubious "success" property
         // is false.
-        GetThingResponse thing = thingResponse.Content;
-        if (!thing.Success)
+        GetThingResponse? thing = thingResponse.Content;
+        if (thing == null || !thing.Success)
         {
             // We throw a newly created ApiException with a
             // 404 response.
@@ -109,6 +114,8 @@ public interface ISomeRandomApi
                 thingResponse.Settings
             );
         }
+
+        return thing;
     }
 }
 ```

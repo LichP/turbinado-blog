@@ -19,16 +19,16 @@ to use as dev boxes for testing Ansible configuration management. One of the fun
 export on the host box which can be accessed in all the Vagrant provisioned VMs. Vagrant has good support for this,
 allowing you to specify an NFS synced folder in your Vagrantfile:
 
-<Code lang="ruby" title="Vagrantfile">
-{`Vagrant.configure(2) do |config|
+```ruby title="Vagrantfile"
+Vagrant.configure(2) do |config|
   config.vm.synced_folder "/host/path", "/guest/mount/point",
     type: "nfs",
     nfs_version: "4.2",
     nfs_udp: false
 
   # etc
-end`}
-</Code>
+end
+```
 
 It takes care of modifying `/etc/exports` on the host, which is great, but we still need to our initial
 configuration of NFS on the host to get things working. Being as I am an NFS newbie (I've carefully avoided it

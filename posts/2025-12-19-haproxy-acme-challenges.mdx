@@ -89,13 +89,13 @@ reconfigure HAProxy any time we want to use a different acconut thumbprint.
 
 To make this work, we need some hooks to run when we generate a certificate. Here's what they look like:
 
-```haproxy-pre.sh
+```bash title="haproxy-pre.sh"
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'add map virt@acme-tokens.map %s %s\n' "${CERTBOT_TOKEN}" "${CERTBOT_VALIDATION}" | socat stdio tcp4-connect:127.0.0.1:9999
 ```
 
-```haproxy-post.sh
+```bash title="haproxy-post.sh"
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'del map virt@acme-tokens.map %s\n' "${CERTBOT_TOKEN}" | socat stdio tcp4-connect:127.0.0.1:9999

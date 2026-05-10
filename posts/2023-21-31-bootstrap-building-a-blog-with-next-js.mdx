@@ -57,7 +57,7 @@ After getting to the state where Things Should Work I fired up `npm run dev`, we
 post. Next JS threw back a 404 in my face for the blog post, but also for the site home page which had previously worked.
 I was a bit stumped, until I spotted that I'd missed out typescript extensions when setting up MDX in `next.config.js`:
 
-```next.config.js
+```js title="next.config.js"
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     // Without 'ts' and 'tsx', our typescript components will simply be ignored and everything becomes Not Found
