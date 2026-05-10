@@ -2,7 +2,7 @@
 
 The personal blog of Phil Stewart.
 
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+This is an [Astro](https://astro.build/) project bootstrapped with `npm create astro -- --template blog`
 
 ## Getting Started
 
@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:4321](http://localhost:4321) with your browser to see the result.
 
 ## Tailwind Stuff
 
