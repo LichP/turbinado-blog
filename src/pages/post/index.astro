@@ -1,0 +1,22 @@
+---
+import { type CollectionEntry, getCollection } from 'astro:content';
+import Layout from '@layouts/Layout.astro';
+import Header from '@components/layout/Header.astro';
+import PostList from '@components/layout/PostList.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../../consts';
+
+type Blog = CollectionEntry<'blog'>;
+
+const posts = (await getCollection('blog')).sort(
+	(a: Blog, b: Blog) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+
+---
+
+<Layout title={SITE_TITLE} description={SITE_DESCRIPTION}>
+	<Header />
+	<main>
+		<h1>All posts</h1>
+		<PostList posts={posts} />
+	</main>
+</Layout>

@@ -1,0 +1,15 @@
+---
+import { type Tag } from '../../content.config';
+import { tagSlug, tagTitle } from '@lib/tag-data';
+import Label from './Label.astro';
+
+interface Props {
+	tag: Tag;
+}
+
+const { tag } = Astro.props;
+---
+
+<Label className="hover:bg-sugar-100">
+    <a class="text-inherit hover:text-sugar-700" href={`/tag/${tagSlug(tag)}`}>{tagTitle(tag)}</a>
+</Label>

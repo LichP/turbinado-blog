@@ -1,4 +1,4 @@
-import type { Tag } from '@/lib/types'
+import type { Tag } from '../content.config'
 
 export function tagSlug(tag: Tag): string {
     if (typeof tag === "string") {

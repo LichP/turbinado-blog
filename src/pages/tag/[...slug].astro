@@ -1,0 +1,45 @@
+---
+import { type CollectionEntry, getCollection, render } from 'astro:content';
+import Layout from '@layouts/Layout.astro';
+import Header from '@components/layout/Header.astro';
+import PostList from '@components/layout/PostList.astro';
+import { type Tag } from '../../content.config';
+import { tagSlug, tagTitle } from '@lib/tag-data';
+
+export async function getStaticPaths() {
+	const posts = await getCollection('blog');
+    return posts
+		.reduce((tagSlugs: Array<string>, post) => {
+			post.data.tags.forEach((tag: Tag) => {
+				if (!tagSlugs.includes(tagSlug(tag))) {
+					tagSlugs.push(tagSlug(tag))
+				}
+			})
+			return tagSlugs;
+	    }, [])
+		.map((tag: string) => { return { params: { slug: tag }} })
+}
+
+async function getPostsByTagDateDesc(slug: string) {
+    const posts = await getCollection('blog'); 
+    return posts
+		.filter((post) => post.data.tags.map((tag: Tag) => tagSlug(tag)).includes(slug))
+		.sort((a, b) => (b.data.date.getTime() ?? 0) - (a.data.date.getTime() || 0))
+}
+
+const { slug } = Astro.params
+
+const posts = await getPostsByTagDateDesc(slug);
+const tag = posts[0].data.tags.find((tag) => tagSlug(tag) == slug)
+
+---
+
+<Layout title={tagTitle(tag ?? slug)}>
+	<Header />
+	<main>
+		<section class="space-y-4 my-4">
+			<h1>Tag: {tagTitle(tag ?? slug)}</h1>
+			<PostList posts={posts} />
+		</section>
+	</main>
+</Layout>

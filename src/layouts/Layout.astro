@@ -1,0 +1,31 @@
+---
+import BaseHead from '@components/layout/BaseHead.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const { title = SITE_TITLE, description = SITE_DESCRIPTION} = Astro.props;
+
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={title} description={description} />
+	</head>
+    <body class="font-sans bg-white text-zinc-950 dark:bg-zinc-900 dark:text-white leading-7">
+        <div class="lg:container lg:mx-auto px-4 lg:max-w-screen-xl space-y-4">
+            <slot />
+            <footer class="text-sm py-6 space-y-2">
+                <hr/>
+                <div class="">
+                    Copyright 2024-2026 <a href="mailto:phil.stewart@lichp.co.uk">Phil Stewart</a> | <a href="https://github.com/LichP/turbinado-blog">View source code on Github</a>
+                </div>
+            </footer>
+        </div>
+    </body>
+    <script is:inline async src="https://eu.umami.is/script.js" data-website-id="d4053088-cc6a-4a3c-bcae-5dce7e7cf50e"></script>
+</html>

@@ -1,0 +1,42 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '@layouts/Layout.astro';
+import PostList from '@components/layout/PostList.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+
+const posts = (await getCollection('blog'))
+  .sort((a, b) => (b.data.date?.valueOf() ?? 0) - (a.data.date?.valueOf() ?? 0));
+
+---
+
+<Layout title={SITE_TITLE} description={SITE_DESCRIPTION}>
+	<main>
+		<header class="flex justify-between mb-4">
+			<hgroup>
+				<h1 class="py-4 text-[2.5rem] md:text-8xl font-bvs tracking-widest font-normal">
+					<a href="/" class="text-zinc-950 dark:text-white hover:text-zinc-950 hover:dark:text-white no-underline hover:underline">turbinado</a>
+				</h1>
+				<p class="text-sm md:text-lg">
+					The blog of Phil Stewart, a UK web developer and tech geek.
+				</p>
+			</hgroup>
+			<div class="relative min-w-16 md:min-w-40">
+				<img src="/images/t-sugary2.svg" alt="Turbinado Logo" class="absolute w-full h-full left-0 right-0 top-0 bottom-0" />
+			</div>
+		</header>
+		<section class="space-y-4 my-4">
+			<h2>
+				About
+			</h2>
+			<p>
+				My name's Phil, and I'm currently the Systems Specialist
+				for <a href="https://www.imperialcollegeunion.org">Imperial College Union</a>,
+				the <a href="https://en.wikipedia.org/wiki/Students%27_union">students' union</a> of <a href="https://www.imperial.ac.uk">Imperial College London</a>.
+			</p>
+		</section>
+		<section class="space-y-4 my-4">
+			<h2>Blogs</h2>
+			<PostList posts={posts} />
+		</section>
+	</main>
+</Layout>

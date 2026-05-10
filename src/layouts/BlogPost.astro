@@ -1,0 +1,81 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '@layouts/Layout.astro';
+import Header from '@components/layout/Header.astro';
+import TagLabel from '@components/ui/TagLabel.astro';
+import type { CollectionEntry } from 'astro:content';
+import FormattedDate from '@components/ui/FormattedDate.astro';
+
+type Props = CollectionEntry<'blog'>['data'];
+
+const { title, description, date, lastModified, tags } = Astro.props;
+
+const posts = (await getCollection('blog'))
+  .sort((a, b) => (b.data.date?.valueOf() ?? 0) - (a.data.date?.valueOf() ?? 0));
+
+const currentPostIndex = posts.findIndex(post => post.id === Astro.params.slug);
+
+const previous: CollectionEntry<'blog'> | undefined =
+  ((currentPostIndex >= 0) && (currentPostIndex < posts.length - 1))
+    ? posts[currentPostIndex + 1]
+    : undefined;
+
+const next: CollectionEntry<'blog'> | undefined =
+  currentPostIndex > 0
+    ? posts[currentPostIndex - 1]
+    : undefined;
+---
+
+<Layout title={title} description={description}>
+	<Header />
+	<main>
+		<article class="space-y-4">
+			<h1>{title}</h1>
+			{date ? (
+				<div class="flex gap-4 items-baseline font-bvs text-zinc-750 dark:text-zinc-400">
+					<span class="flex-none"><FormattedDate date={date} /></span>
+					{lastModified ? (
+						<span class="text-sm">
+							(Last modified: <FormattedDate date={lastModified} />)
+						</span>
+					) : null}
+				</div>
+			) : null}
+			{tags && tags.length > 0 ? (
+				<ul class="list-none px-0 flex flex-wrap gap-x-4 gap-y-1.5 items-baseline font-bvs text-zinc-750 dark:text-zinc-400">
+					{tags.map((tag) => {
+						if (tag) {
+							return (
+								<li>
+									<TagLabel tag={tag} />
+								</li>
+							)
+						}
+						else {
+							return null;
+						}
+					})}
+				</ul>
+			) : null}
+			<slot />
+		</article>
+	</main>
+	{ previous || next ? (
+		<>
+		<hr/>
+		<nav>
+			<h2 class="text-lg">More Posts</h2>
+			{previous ? (
+				<div>
+					Previous: <a href={`/post/${previous.id}`}>{previous.data.title}</a>
+				</div>
+			) : null}
+			{next ? (
+				<div>
+					Next: <a href={`/post/${next.id}`}>{next.data.title}</a>
+				</div>
+			) : null}
+		</nav>
+		</>
+	) : null}
+</Layout>
